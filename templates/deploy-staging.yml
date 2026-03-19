@@ -1,13 +1,15 @@
 # =============================================================================
 # TEMPLATE: Copy this file to .github/workflows/deploy-staging.yml
 #
-# Triggers Render deploys when an AI-generated PR is merged to main.
+# - Frontend → GitHub Pages (free, via Actions)
+# - Backend  → Render Web Service (via deploy hook)
 #
 # Required secrets in the target repo:
-#   RENDER_BACKEND_DEPLOY_HOOK  — from Render > backend service > Deploy Hook
-#   RENDER_FRONTEND_DEPLOY_HOOK — from Render > frontend static site > Deploy Hook
+#   RENDER_BACKEND_DEPLOY_HOOK  — Render > backend service > Settings > Deploy Hook
 #   RENDER_BACKEND_URL          — e.g. https://app-backend.onrender.com
-#   RENDER_FRONTEND_URL         — e.g. https://app-frontend.onrender.com
+#
+# Required repo setting:
+#   Settings > Pages > Source: "GitHub Actions"
 # =============================================================================
 
 name: Deploy Staging
@@ -21,16 +23,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-backend:
+    name: Deploy backend to Render
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
       contains(github.event.pull_request.title, '[AI]'))
+    outputs:
+      backend_url: ${{ secrets.RENDER_BACKEND_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -41,35 +42,92 @@ jobs:
         if: hashFiles('backend/**') != ''
         run: |
           echo "Triggering backend deploy on Render..."
-          curl -s --fail "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}" | jq .
+          curl -s --fail "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
           echo "Backend deploy triggered."
 
-      - name: Trigger Render frontend deploy
-        if: hashFiles('frontend/**') != ''
-        run: |
-          echo "Triggering frontend deploy on Render..."
-          curl -s --fail "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}" | jq .
-          echo "Frontend deploy triggered."
+  deploy-frontend:
+    name: Deploy frontend to GitHub Pages
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.title, '[AI]'))
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deploy.outputs.page_url }}
 
-      - name: Comment on PR with deploy status
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Check frontend exists
+        id: check
+        run: |
+          if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'true'
+        with:
+          node-version: '20'
+
+      - name: Install and build frontend
+        if: steps.check.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm install && npm run build
+
+      - uses: actions/configure-pages@v4
+        if: steps.check.outputs.exists == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.exists == 'true'
+        with:
+          path: frontend/dist
+
+      - uses: actions/deploy-pages@v4
+        if: steps.check.outputs.exists == 'true'
+        id: deploy
+
+  notify:
+    name: Comment on PR
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.title, '[AI]')
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/github-script@v7
         with:
           script: |
             const backendUrl = '${{ secrets.RENDER_BACKEND_URL }}' || '_not configured_';
-            const frontendUrl = '${{ secrets.RENDER_FRONTEND_URL }}' || '_not configured_';
+            const frontendUrl = '${{ needs.deploy-frontend.outputs.page_url }}' || '_not configured_';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               body: [
-                '### Staging Deploy triggered on Render',
+                '### Staging Deploy',
                 '',
-                '| Service | URL |',
-                '|---|---|',
-                `| Backend | ${backendUrl} |`,
-                `| Frontend | ${frontendUrl} |`,
+                '| Service | URL | Platform |',
+                '|---|---|---|',
+                `| Backend | ${backendUrl} | Render |`,
+                `| Frontend | ${frontendUrl} | GitHub Pages |`,
                 '',
-                '_Deploy triggered by AI Issue Solver pipeline. Check Render dashboard for status._',
+                '_Deployed by AI Issue Solver pipeline_',
               ].join('\n'),
             });
