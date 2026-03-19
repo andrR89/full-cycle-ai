@@ -1,263 +1,184 @@
 # full-cycle-ai
 
-A multi-agent LangGraph pipeline that solves GitHub issues automatically. Point it at any repository, label an issue `ai-solve`, and the pipeline classifies the problem, generates backend and/or frontend code, reviews its own output, and opens a pull request — all without human intervention.
+Pipeline multi-agente que resolve issues do GitHub **do início ao fim, sem interação humana**. Marque uma issue com `ai-solve`, e o pipeline classifica o problema, gera código backend e/ou frontend, revisa sua própria saída, abre um pull request, aguarda o CI e faz o merge automaticamente.
 
 ---
 
-## Architecture
+## Como funciona
 
 ```
-                        ┌─────────────────────────────────────────┐
-                        │          GitHub Actions Trigger          │
-                        │  (issues: labeled  OR  repository_dispatch) │
-                        └────────────────────┬────────────────────┘
-                                             │
-                              ┌──────────────▼──────────────┐
-                              │     Agent 0 — Issue Creator │  ← REST API (optional)
-                              │  POST /issues  (FastAPI)     │
-                              └──────────────┬──────────────┘
-                                             │ (creates issue + label)
-                              ┌──────────────▼──────────────┐
-                              │   Agent 1 — Reader           │
-                              │   Gemini Flash               │
-                              │   - Classifies layers        │
-                              │   - Extracts acceptance      │
-                              │     criteria                 │
-                              │   - Fetches codebase context │
-                              └──────┬──────────────┬───────┘
-                                     │              │
-                     ┌───────────────▼──┐        ┌──▼───────────────────┐
-                     │ Agent 2 — Backend│        │ Agent 3 — Frontend   │
-                     │ Claude Sonnet    │        │ Claude Sonnet         │
-                     │ Node/Express/    │        │ React/TypeScript/MUI  │
-                     │ Prisma code      │        │ component code        │
-                     └───────────┬──────┘        └───────┬───────────────┘
-                                 │     (parallel)        │
-                                 └──────────┬────────────┘
-                                            │
-                              ┌─────────────▼─────────────┐
-                              │   Agent 4 — Reviewer       │
-                              │   Gemini Pro               │
-                              │   - Cross-layer review     │
-                              │   - Acceptance criteria    │
-                              │     validation             │
-                              └──────┬──────────────┬──────┘
-                                     │              │
-                               approved          rejected
-                                     │              │
-                                     │         retry < 2 → back to Reader
-                                     │         retry >= 2 → close issue
-                                     │
-                              ┌──────▼──────────────────────┐
-                              │   Agent 5 — Deployer         │
-                              │   PyGithub (no LLM)          │
-                              │   - Creates branch           │
-                              │   - Commits files            │
-                              │   - Opens pull request       │
-                              │   - Auto-merges if CI passes │
-                              └──────────────────────────────┘
+Issue labeled `ai-solve`
+        │
+        ▼
+[Agent 1 — Reader]       Gemini Flash
+  Classifica layers (backend/frontend)
+  Extrai acceptance criteria
+  Busca contexto do codebase
+        │
+   ┌────┴────┐  paralelo
+   ▼         ▼
+[Agent 2]  [Agent 3]     Claude Sonnet 4.6
+Backend    Frontend
+Node/      React/TS/MUI
+Express/
+Prisma
+   └────┬────┘
+        ▼
+[Agent 4 — Reviewer]     Gemini Flash
+  Avalia código vs acceptance criteria
+  Aprova → Deployer
+  Rejeita → retry (máx 2x) → fecha issue com feedback
+        │
+        ▼
+[Agent 5 — Deployer]     PyGithub (sem LLM)
+  Cria branch
+  Commit único (Git Tree API)
+  Cria PR com descrição rica
+  Aguarda CI
+  Auto-merge se passa
+        │
+   ┌────┴────┐
+   ▼         ▼
+Koyeb     GitHub Pages
+Backend   Frontend
 ```
 
 ---
 
-## Agents
+## Agentes
 
-| # | Agent | Model | Responsibility |
-|---|-------|-------|----------------|
-| 0 | Issue Creator | Gemini Flash | REST API — converts natural language into structured GitHub issues |
-| 1 | Reader | Gemini Flash | Classifies layers (`backend`/`frontend`), extracts acceptance criteria, fetches codebase context |
-| 2 | Backend Specialist | Claude Sonnet | Generates Node.js / Express / Prisma code (never frontend) |
-| 3 | Frontend Specialist | Claude Sonnet | Generates React / TypeScript / MUI code (never backend) |
-| 4 | Reviewer | Gemini Pro | Cross-layer code review against acceptance criteria; approves or rejects with actionable feedback |
-| 5 | Deployer | PyGithub | Creates branch, commits files, opens PR, polls CI, auto-merges on success |
+| # | Agente | Modelo | Responsabilidade |
+|---|--------|--------|-----------------|
+| 1 | Reader | Gemini 2.0 Flash | Classifica layers, extrai critérios, busca contexto do repo |
+| 2 | Backend Specialist | Claude Sonnet 4.6 | Gera código Node.js / Express / Prisma (nunca frontend) |
+| 3 | Frontend Specialist | Claude Sonnet 4.6 | Gera código React / TypeScript / MUI (nunca backend) |
+| 4 | Reviewer | Gemini 2.0 Flash | Review cross-layer contra acceptance criteria; aprova ou rejeita com feedback acionável |
+| 5 | Deployer | PyGithub | Cria branch, commit único, PR, CI polling, auto-merge |
+
+---
+
+## Stack de hosting (gratuito, sem cartão)
+
+| Camada | Plataforma | Deploy |
+|--------|-----------|--------|
+| Backend (Node.js) | [Koyeb](https://koyeb.com) | Auto-deploy no push para main via Dockerfile |
+| Frontend (React) | GitHub Pages | Deploy via Actions após merge |
+| Banco de dados | [Supabase](https://supabase.com) | PostgreSQL gerenciado, `DATABASE_URL` no Koyeb |
 
 ---
 
 ## Setup
 
-### 1. GitHub Secrets
+### 1. Secrets no repo do pipeline (`full-cycle-ai`)
 
-The following secrets must be configured in the `full-cycle-ai` repository under **Settings → Secrets and variables → Actions**:
+Settings → Secrets and variables → Actions:
 
-| Secret | Description |
-|--------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (Claude Sonnet) |
-| `GEMINI_API_KEY` | Google Gemini API key |
-| `GH_PAT` | GitHub Personal Access Token with `repo` and `workflow` scopes |
+| Secret | Descrição |
+|--------|-----------|
+| `ANTHROPIC_API_KEY` | Chave Anthropic (Claude Sonnet) |
+| `GEMINI_API_KEY` | Chave Google Gemini |
+| `GH_PAT` | GitHub PAT com escopos `repo` e `workflow` |
 
-### 2. Python requirements
+### 2. Dependências Python
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Python 3.11 is required. Key dependencies: `langgraph`, `anthropic`, `google-generativeai`, `PyGithub`, `fastapi`, `pydantic`, `tenacity`, `slowapi`.
+Requer Python 3.11+. Dependências principais: `langgraph`, `anthropic`, `google-genai`, `PyGithub`, `pydantic`, `tenacity`.
 
-### 3. Local environment
-
-Copy `.env.example` to `.env` and fill in the values:
+### 3. Configuração local
 
 ```bash
-cp .env.example .env
+cp .env.example .env  # preencha as variáveis
 ```
 
 ---
 
-## Usage: Central pipeline (self-hosted issues)
+## Uso: resolver issues de outro repositório
 
-Label any issue in the `full-cycle-ai` repository with `ai-solve`. The workflow in `.github/workflows/ai-issue-solver.yml` fires automatically and runs `python src/main.py`.
+### Passo 1 — Copiar o workflow trigger para o repo-alvo
+
+```bash
+cp templates/trigger-ai-pipeline.yml .github/workflows/trigger-ai-pipeline.yml
+cp templates/ci.yml                  .github/workflows/ci.yml
+cp templates/deploy-staging.yml      .github/workflows/deploy-staging.yml
+```
+
+### Passo 2 — Secrets no repo-alvo
+
+| Secret | Descrição |
+|--------|-----------|
+| `PIPELINE_PAT` | PAT com acesso ao repo `full-cycle-ai` (dispara o pipeline) |
+| `KOYEB_BACKEND_URL` | URL do backend no Koyeb (para o notify do deploy) |
+
+### Passo 3 — Configurar Koyeb e Supabase
+
+Ver instruções em [`templates/koyeb.yaml`](templates/koyeb.yaml).
+
+### Passo 4 — Habilitar GitHub Pages
+
+Settings → Pages → Source: **GitHub Actions**
+
+### Como funciona
+
+Quando uma issue recebe o label `ai-solve`:
+
+1. `trigger-ai-pipeline.yml` envia um `repository_dispatch` para `andrR89/full-cycle-ai` com o payload da issue
+2. O pipeline roda contra o **repo-alvo**
+3. O Deployer abre um PR no **repo-alvo**
+4. O CI (`ci.yml`) valida o código gerado
+5. Após merge, o `deploy-staging.yml` publica o frontend no GitHub Pages; o Koyeb redeploya o backend automaticamente
 
 ---
 
-## Usage: Multi-repo (trigger from any project)
+## Guardrails de segurança
 
-The pipeline can solve issues from **external repositories**. Two steps are required:
+Quatro camadas aplicadas antes de qualquer código chegar ao GitHub:
 
-### Step 1 — Add the mini workflow to the target repo
+| Guardrail | Função | O que bloqueia |
+|-----------|--------|----------------|
+| Sanitização de prompt | `sanitize_prompt_input()` | Injeção de prompt, null bytes, trunca entradas > 10k chars |
+| Validação de paths | `validate_file_path()` | Path traversal (`../../`), caminhos absolutos, arquivos sensíveis (`.env`, `.pem`, `id_rsa`) |
+| Filtro de arquivos | `validate_and_filter_files()` | Rejeita silenciosamente arquivos fora dos diretórios permitidos |
+| Scan de código | `scan_generated_code()` | `eval()`, `exec()`, `os.system()`, `subprocess(shell=True)`, `DROP TABLE`, credenciais hardcoded |
 
-Copy `.github/workflows/trigger-ai-pipeline.yml` into the target repository:
+Prefixos de path permitidos:
+- **Backend**: `backend/src/`, `backend/prisma/`, `backend/tests/`, `backend/package.json`, `backend/Dockerfile`, `backend/jest.config.*`
+- **Frontend**: `frontend/src/`, `frontend/public/`, `frontend/tests/`, `frontend/package.json`, `frontend/index.html`, `frontend/vite.config.*`, `frontend/tsconfig*.json`, `frontend/Dockerfile`
 
-```bash
-# In the target repo
-mkdir -p .github/workflows
-cp /path/to/full-cycle-ai/.github/workflows/trigger-ai-pipeline.yml \
-   .github/workflows/trigger-ai-pipeline.yml
-```
-
-### Step 2 — Add a secret to the target repo
-
-In the target repository, add a secret named `PIPELINE_PAT` — a GitHub PAT that has `repo` and `workflow` access to `andrR89/full-cycle-ai`.
-
-### How it works
-
-When an issue in the target repo is labeled `ai-solve`:
-
-1. `trigger-ai-pipeline.yml` fires and sends a `repository_dispatch` event to `andrR89/full-cycle-ai` with the issue payload (`repo_name`, `issue_number`, `issue_title`, `issue_body`, `issue_url`).
-2. `ai-issue-solver.yml` receives the dispatch, reads the payload, and runs the full pipeline against the **target repository**.
-3. The Deployer agent opens a PR in the **target repository**.
+Arquivos de teste são isentos do scan de credenciais (senhas em testes são esperadas).
 
 ---
 
-## Usage: Agent 0 REST API
-
-Agent 0 exposes an HTTP API for creating structured GitHub issues from natural language. Start the server:
+## Desenvolvimento e testes
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Endpoints
-
-#### `POST /issues`
-
-Convert natural language into a GitHub issue and optionally trigger the AI pipeline.
-
-```bash
-curl -X POST http://localhost:8000/issues \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Users cannot reset their password. The reset link expires immediately after being sent.",
-    "repo_name": "my-org/my-repo",
-    "auto_label": true
-  }'
-```
-
-Response:
-
-```json
-{
-  "issue_number": 47,
-  "issue_url": "https://github.com/my-org/my-repo/issues/47",
-  "issue_title": "Password reset link expires immediately",
-  "layers": ["backend"],
-  "priority": "high",
-  "labels_applied": ["bug", "ai-solve", "priority:high"],
-  "pipeline_triggered": true
-}
-```
-
-#### `POST /issues/batch`
-
-Create up to 10 issues in a single request. Rate limited to 5 requests/minute.
-
-#### `GET /health`
-
-Returns service status and whether API keys are configured.
-
-#### `GET /docs`
-
-Auto-generated Swagger UI (OpenAPI).
-
-### Authentication
-
-Set the `API_KEY` environment variable to require an `X-API-Key` header on all requests. If `API_KEY` is not set, the API is open.
-
-### Rate limiting
-
-- `/issues`: 10 requests/minute per IP
-- `/issues/batch`: 5 requests/minute per IP
-
----
-
-## Guardrails
-
-The pipeline enforces four layers of security before any code reaches GitHub:
-
-| Guardrail | Function | What it blocks |
-|-----------|----------|----------------|
-| Prompt injection sanitization | `sanitize_prompt_input()` | Injection patterns (`ignore all previous instructions`, `jailbreak`, etc.); null bytes; truncates inputs > 10,000 chars |
-| File path validation | `validate_file_path()` | Path traversal (`../../`), absolute paths, hidden root files, sensitive filenames (`.env`, `.pem`, `id_rsa`), paths outside allowed directories |
-| File filter | `validate_and_filter_files()` | Applies path validation to all LLM-generated files; silently drops rejected files and logs them |
-| Dangerous code scan | `scan_generated_code()` | `eval()`, `exec()`, `os.system()`, `subprocess` with `shell=True`, `rm -rf`, `DROP TABLE`, hardcoded credentials and tokens |
-
-Allowed file path prefixes:
-
-- **Backend**: `src/routes/`, `src/middleware/`, `src/utils/`, `src/config/`, `src/services/`, `prisma/`, `tests/`, `test/`, `__tests__/`
-- **Frontend**: `src/components/`, `src/pages/`, `src/hooks/`, `src/contexts/`, `src/store/`, `src/styles/`, `src/types/`, `src/api/`
-
-Security warnings from the code scanner are appended to the PR body and flagged for human review rather than blocking the PR.
-
----
-
-## Development and testing
-
-### Run the test suite
-
-```bash
-# Install dependencies (includes test deps via requirements.txt)
-pip install -r requirements.txt
-pip install pytest
-
-# Run all tests
+# Rodar todos os testes (sem chamadas reais de API — 100% mockado)
 pytest
 
-# Run a specific test file
-pytest tests/test_guardrails.py -v
-
-# Run with coverage
-pip install pytest-cov
+# Com cobertura
 pytest --cov=src --cov-report=term-missing
+
+# Arquivo específico
+pytest tests/test_guardrails.py -v
 ```
 
-All tests are fully isolated — no real API calls are made. External services (Gemini, Claude, PyGithub) are mocked with `unittest.mock`.
-
-### Test structure
+### Estrutura de testes
 
 ```
 tests/
-├── __init__.py
-├── test_guardrails.py      # All 4 guardrail functions
-├── test_graph.py           # layer_router and review_router
+├── test_guardrails.py      # 4 funções de guardrail
+├── test_graph.py           # layer_router e review_router
 ├── test_main.py            # build_initial_state, validate_environment
 └── agents/
-    ├── __init__.py
-    ├── test_reader.py       # Agent 1 — classification, fallback, output validation
-    ├── test_backend.py      # Agent 2 — generation, layer gating, output validation
-    ├── test_reviewer.py     # Agent 4 — approval/rejection, retry counter, output validation
-    └── test_deployer.py     # Agent 5 — file collection, branch/PR creation, rejection path
+    ├── test_reader.py      # classificação, fallback, output
+    ├── test_backend.py     # geração, layer gating, output
+    ├── test_reviewer.py    # aprovação/rejeição, retry, output
+    └── test_deployer.py    # coleta de arquivos, branch/PR, rejeição
 ```
 
-### Running the pipeline locally
+### Rodar o pipeline localmente
 
 ```bash
 export ANTHROPIC_API_KEY=...
@@ -265,8 +186,8 @@ export GEMINI_API_KEY=...
 export GH_PAT=...
 export GITHUB_REPO=owner/repo
 export ISSUE_NUMBER=42
-export ISSUE_TITLE="Add pagination to users list"
-export ISSUE_BODY="The users endpoint should support page and limit query parameters."
+export ISSUE_TITLE="Add login page"
+export ISSUE_BODY="Users need to authenticate..."
 export ISSUE_URL="https://github.com/owner/repo/issues/42"
 
 python src/main.py
@@ -274,17 +195,13 @@ python src/main.py
 
 ---
 
-## Cost estimate
+## Estimativa de custo por run
 
-Costs are per pipeline run (one issue). Estimates assume typical issue complexity.
-
-| Agent | Model | Input tokens | Output tokens | Estimated cost (USD) |
-|-------|-------|-------------|--------------|----------------------|
-| Reader | Gemini 1.5 Flash | ~2,000 | ~300 | ~$0.001 |
-| Backend | Claude Sonnet | ~6,000 | ~4,000 | ~$0.075 |
-| Frontend | Claude Sonnet | ~6,000 | ~4,000 | ~$0.075 |
-| Reviewer | Gemini 1.5 Pro | ~8,000 | ~1,000 | ~$0.030 |
-| **Total (single attempt)** | | | | **~$0.18** |
-| **Total (2 retries, worst case)** | | | | **~$0.54** |
-
-Costs exclude GitHub Actions compute time (ubuntu-latest, typically 2–5 minutes per run).
+| Agente | Modelo | Custo estimado |
+|--------|--------|---------------|
+| Reader | Gemini 2.0 Flash | ~$0.001 |
+| Backend | Claude Sonnet 4.6 | ~$0.075 |
+| Frontend | Claude Sonnet 4.6 | ~$0.075 |
+| Reviewer | Gemini 2.0 Flash | ~$0.002 |
+| **Total (1 tentativa)** | | **~$0.15** |
+| **Total (2 retries, pior caso)** | | **~$0.45** |
