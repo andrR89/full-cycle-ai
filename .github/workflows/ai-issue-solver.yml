@@ -43,7 +43,7 @@ jobs:
           ISSUE_TITLE: ${{ github.event.client_payload.issue_title || github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.client_payload.issue_body || github.event.issue.body }}
           ISSUE_URL: ${{ github.event.client_payload.issue_url || github.event.issue.html_url }}
-        run: python src/main.py
+        run: PYTHONPATH=${{ github.workspace }} python src/main.py
 
       - name: Upload pipeline logs
         if: always()
