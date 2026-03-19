@@ -1,0 +1,32 @@
+# =============================================================================
+# Koyeb service configuration — backend Node.js
+#
+# Koyeb auto-deploys when main branch is updated.
+# No deploy hook needed in GitHub Actions.
+#
+# SETUP (one-time, in Koyeb Dashboard — free, no card required):
+#
+# 1. app.koyeb.com > Create App
+# 2. Source: GitHub > select repo > branch: main
+# 3. Root directory: backend
+# 4. Build command:  npm install
+# 5. Start command:  node src/server.js
+# 6. Port: 3000
+# 7. Environment variables:
+#      NODE_ENV     = production
+#      DATABASE_URL = <connection string from Supabase>
+#      PORT         = 3000
+#
+# After creating:
+# - Copy the service URL (e.g. https://app-backend-xxx.koyeb.app)
+# - Add as secret KOYEB_BACKEND_URL in the GitHub repo
+#
+# =============================================================================
+#
+# DATABASE SETUP (Supabase — free, no card required):
+#
+# 1. supabase.com > New Project
+# 2. Copy the connection string (Settings > Database > Connection string > URI)
+# 3. Add as DATABASE_URL env var in Koyeb service
+#
+# =============================================================================
