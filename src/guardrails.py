@@ -91,6 +91,7 @@ ALLOWED_BACKEND_PREFIXES = (
     "backend/__tests__/",
     "backend/package.json",
     "backend/.env.example",
+    "backend/Dockerfile",
 )
 
 ALLOWED_FRONTEND_PREFIXES = (
@@ -104,6 +105,7 @@ ALLOWED_FRONTEND_PREFIXES = (
     "frontend/index.html",
     "frontend/vite.config.ts",
     "frontend/tsconfig.json",
+    "frontend/Dockerfile",
 )
 
 ALL_ALLOWED_PREFIXES = ALLOWED_BACKEND_PREFIXES + ALLOWED_FRONTEND_PREFIXES

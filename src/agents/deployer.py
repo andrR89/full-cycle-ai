@@ -35,22 +35,56 @@ def _get_repo(repo_name: str) -> Tuple[Github, Repository]:
     return g, repo
 
 
+BACKEND_DOCKERFILE = """\
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json .
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["node", "src/server.js"]
+"""
+
+FRONTEND_DOCKERFILE = """\
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json .
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+"""
+
+
 def _collect_files(state: AgentState) -> List[Dict[str, str]]:
     """
     Collect all files to commit from agent outputs.
+    Injects Dockerfiles so Koyeb can build without a lockfile.
     Returns list of {"path": ..., "content": ...} dicts.
     """
     all_files: List[Dict[str, str]] = []
 
     backend_output = state.get("backend_output")
     if backend_output and not backend_output.get("error"):
+        paths = [f["path"] for f in backend_output.get("files", [])]
         for f in backend_output.get("files", []):
             all_files.append({"path": f["path"], "content": f["content"]})
+        # Always inject Dockerfile so Koyeb can build without a lockfile
+        if not any(p == "backend/Dockerfile" for p in paths):
+            all_files.append({"path": "backend/Dockerfile", "content": BACKEND_DOCKERFILE})
 
     frontend_output = state.get("frontend_output")
     if frontend_output and not frontend_output.get("error"):
+        paths = [f["path"] for f in frontend_output.get("files", [])]
         for f in frontend_output.get("files", []):
             all_files.append({"path": f["path"], "content": f["content"]})
+        # Inject frontend Dockerfile in case it's needed
+        if not any(p == "frontend/Dockerfile" for p in paths):
+            all_files.append({"path": "frontend/Dockerfile", "content": FRONTEND_DOCKERFILE})
 
     return all_files
 
