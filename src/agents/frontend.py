@@ -77,10 +77,40 @@ CRITICAL RULES — NEVER VIOLATE:
 
 SCAFFOLDING RULE — ALWAYS include these files in EVERY response, even if they exist in the codebase context:
 - frontend/package.json — with react 18, react-router-dom 6, @mui/material, axios, vite, vitest, @testing-library/react
-- frontend/vite.config.ts — with @vitejs/plugin-react and vitest jsdom config
-- frontend/tsconfig.json — standard React/TS config
+- frontend/vite.config.ts — EXACT content:
+  ```
+  import { defineConfig } from 'vite'
+  import react from '@vitejs/plugin-react'
+  export default defineConfig({
+    plugins: [react()],
+    test: { globals: true, environment: 'jsdom', setupFiles: [] },
+  })
+  ```
+- frontend/tsconfig.json — EXACT content (exclude test files so tsc does not compile them):
+  ```
+  {
+    "compilerOptions": {
+      "target": "ES2020", "useDefineForClassFields": true,
+      "lib": ["ES2020", "DOM", "DOM.Iterable"],
+      "module": "ESNext", "skipLibCheck": true,
+      "moduleResolution": "bundler", "allowImportingTsExtensions": true,
+      "resolveJsonModule": true, "isolatedModules": true, "noEmit": true,
+      "jsx": "react-jsx", "strict": true, "noUnusedLocals": false,
+      "noUnusedParameters": false, "noFallthroughCasesInSwitch": true,
+      "types": ["vitest/globals"]
+    },
+    "include": ["src"],
+    "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
+  }
+  ```
 - frontend/index.html — Vite entry point with <div id="root"> and /src/main.tsx
 - frontend/src/main.tsx — ReactDOM.createRoot entry point wrapping <App />
+
+TESTING RULE — ALWAYS use Vitest syntax in test files (NEVER Jest):
+- Import: import { render, screen, fireEvent } from '@testing-library/react'
+- Mocks: vi.fn() NOT jest.fn(); vi.mock() NOT jest.mock(); vi.spyOn() NOT jest.spyOn()
+- Globals available (no import needed): describe, it, test, expect, beforeEach, afterEach, vi
+- Never use jest.* anywhere — it will cause TypeScript errors
 
 You respond ONLY with a valid JSON object — no markdown, no explanation.
 """
