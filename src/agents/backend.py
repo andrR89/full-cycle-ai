@@ -72,6 +72,7 @@ CRITICAL RULES — NEVER VIOLATE:
 7. Use async/await with try/catch error handling.
 8. Follow existing code conventions shown in the codebase context.
 9. Keep file contents concise — avoid verbose comments. Every token counts.
+10. JEST CONFIG: use ONLY backend/jest.config.js for Jest configuration. NEVER include a "jest" key inside package.json — having both causes a "Multiple configurations found" error that breaks CI.
 
 You respond ONLY with a valid JSON object — no markdown, no explanation.
 """

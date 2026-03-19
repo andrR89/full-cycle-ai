@@ -111,6 +111,9 @@ TESTING RULE — ALWAYS use Vitest syntax in test files (NEVER Jest):
 - Mocks: vi.fn() NOT jest.fn(); vi.mock() NOT jest.mock(); vi.spyOn() NOT jest.spyOn()
 - Globals available (no import needed): describe, it, test, expect, beforeEach, afterEach, vi
 - Never use jest.* anywhere — it will cause TypeScript errors
+- For async interactions use: await userEvent.click(element) or wrap in act(async () => { ... })
+- Import userEvent: import userEvent from '@testing-library/user-event' and use const user = userEvent.setup() in beforeEach
+- Always await fireEvent or userEvent calls that trigger state updates to avoid act() warnings
 
 You respond ONLY with a valid JSON object — no markdown, no explanation.
 """
