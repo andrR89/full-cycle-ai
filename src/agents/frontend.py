@@ -73,6 +73,7 @@ CRITICAL RULES — NEVER VIOLATE:
 8. Generate React Testing Library unit tests for components.
 9. Handle loading states, error states, and empty states.
 10. Follow existing code conventions shown in the codebase context.
+11. Keep file contents concise — avoid verbose comments, prefer short variable names in tests. Every token counts.
 
 You respond ONLY with a valid JSON object — no markdown, no explanation.
 """
@@ -136,13 +137,18 @@ def _call_claude_sonnet(
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=8192,
+        max_tokens=16000,
         system=FRONTEND_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )
 
     raw = message.content[0].text.strip()
-    logger.debug("Frontend raw response length: %d chars", len(raw))
+    logger.debug("Frontend raw response length: %d chars, stop_reason: %s",
+                 len(raw), message.stop_reason)
+
+    if message.stop_reason == "max_tokens":
+        logger.warning("Frontend response was truncated — raising to trigger retry")
+        raise ValueError("Response truncated (max_tokens reached). Retry will request a shorter output.")
 
     # Strip markdown fences if present
     if raw.startswith("```"):
