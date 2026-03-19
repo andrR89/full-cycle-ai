@@ -30,6 +30,8 @@ class AgentState(TypedDict):
     # Deployer
     branch_name: Optional[str]
     pr_url: Optional[str]
+    ci_passed: Optional[bool]       # True = merged, False = left open, None = not run yet
+    guardrail_rejected: Optional[List[str]]  # paths rejected by guardrail
 
     # Codebase context (fetched from repo)
     codebase_context: Optional[str]

@@ -279,7 +279,7 @@ def run(state: AgentState) -> AgentState:
         logger.error("Deployer: %d file(s) rejected by path guardrail: %s", len(rejected_paths), rejected_paths)
     if not files:
         logger.error("Deployer: all files rejected by guardrail. Aborting.")
-        return {**state, "branch_name": None, "pr_url": None}
+        return {**state, "branch_name": None, "pr_url": None, "ci_passed": None, "guardrail_rejected": rejected_paths}
 
     # Guardrail: scan for dangerous code patterns
     security_warnings = scan_generated_code(files)
@@ -294,6 +294,15 @@ def run(state: AgentState) -> AgentState:
     # Create Pull Request
     pr_title = f"[AI] {state.get('issue_title', f'Issue #{issue_number}')}"
     pr_body = _build_pr_body(state)
+
+    if rejected_paths:
+        rejected_block = "\n".join(f"- `{p}`" for p in rejected_paths)
+        pr_body += (
+            f"\n\n## ⚠️ Files Skipped by Safety Guardrail\n"
+            f"The following files were generated but **not committed** because they fall outside "
+            f"the allowed directory structure. Manual intervention may be required:\n"
+            f"{rejected_block}"
+        )
 
     if security_warnings:
         warning_block = "\n".join(f"- {w}" for w in security_warnings)
@@ -371,6 +380,8 @@ def run(state: AgentState) -> AgentState:
         **state,
         "branch_name": branch_name,
         "pr_url": pr.html_url,
+        "ci_passed": ci_passed,
+        "guardrail_rejected": rejected_paths if rejected_paths else [],
     }
 
 

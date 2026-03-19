@@ -211,6 +211,14 @@ def _call_gemini_pro(
         raw = "\n".join(lines[start:end])
 
     data = json.loads(raw)
+
+    # Gemini sometimes returns reviewer_feedback as a dict (e.g. {}) instead of a string
+    if not isinstance(data.get("reviewer_feedback"), str):
+        feedback_val = data.get("reviewer_feedback")
+        data["reviewer_feedback"] = (
+            json.dumps(feedback_val) if feedback_val else "No feedback provided."
+        )
+
     return ReviewerOutput(**data)
 
 

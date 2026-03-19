@@ -96,6 +96,8 @@ def build_initial_state() -> dict:
         # Deployer outputs
         "branch_name": None,
         "pr_url": None,
+        "ci_passed": None,
+        "guardrail_rejected": [],
         # Codebase context
         "codebase_context": None,
     }
@@ -143,6 +145,14 @@ def main() -> None:
         logger.info("  Retry count: %d", final_state.get("retry_count", 0))
         logger.info("  PR URL: %s", final_state.get("pr_url") or "N/A (rejected or no files)")
         logger.info("  Branch: %s", final_state.get("branch_name") or "N/A")
+        ci_passed = final_state.get("ci_passed")
+        if ci_passed is True:
+            logger.info("  CI: passed — PR auto-merged")
+        elif ci_passed is False:
+            logger.warning("  CI: failed or timed out — PR left open for manual review")
+        guardrail_rejected = final_state.get("guardrail_rejected") or []
+        if guardrail_rejected:
+            logger.warning("  Guardrail rejected %d file(s): %s", len(guardrail_rejected), guardrail_rejected)
         logger.info("=" * 60)
 
         # Write summary to GitHub Actions step summary if available
@@ -187,10 +197,25 @@ def _write_github_summary(state: dict, summary_path: str) -> None:
         ]
 
         if pr_url:
+            ci_passed = state.get("ci_passed")
+            if ci_passed is True:
+                ci_status = "✅ Passed — auto-merged"
+            elif ci_passed is False:
+                ci_status = "⚠️ Failed / timed out — left open for manual review"
+            else:
+                ci_status = "—"
             lines.extend([
                 f"**PR Created:** [{pr_url}]({pr_url})",
+                f"**CI:** {ci_status}",
                 f"",
             ])
+
+        guardrail_rejected = state.get("guardrail_rejected") or []
+        if guardrail_rejected:
+            lines.append("### ⚠️ Files Skipped by Guardrail")
+            for p in guardrail_rejected:
+                lines.append(f"- `{p}`")
+            lines.append("")
 
         if layer_reviews:
             lines.append("### Layer Reviews")
