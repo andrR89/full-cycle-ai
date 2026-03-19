@@ -12,7 +12,7 @@ import logging
 import time
 from typing import Dict, List, Optional, Tuple
 
-from github import Github, GithubException
+from github import Github, GithubException, InputGitTreeElement
 from github.Repository import Repository
 from github.GithubObject import NotSet
 
@@ -130,12 +130,12 @@ def _commit_files(
         path = file_info["path"]
         content = file_info["content"]
         blob = repo.create_git_blob(content, "utf-8")
-        tree_elements.append({
-            "path": path,
-            "mode": "100644",
-            "type": "blob",
-            "sha": blob.sha,
-        })
+        tree_elements.append(InputGitTreeElement(
+            path=path,
+            mode="100644",
+            type="blob",
+            sha=blob.sha,
+        ))
         logger.info("Staged file: %s", path)
 
     # Create a new tree with all files
