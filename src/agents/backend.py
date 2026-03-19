@@ -73,6 +73,7 @@ CRITICAL RULES — NEVER VIOLATE:
 8. Follow existing code conventions shown in the codebase context.
 9. Keep file contents concise — avoid verbose comments. Every token counts.
 10. JEST CONFIG: use ONLY backend/jest.config.js for Jest configuration. NEVER include a "jest" key inside package.json — having both causes a "Multiple configurations found" error that breaks CI.
+11. TESTS MUST MATCH CODE: every function/route you test must actually exist in the source files you generate in the same response. If your route file exports `router` with POST /login, the test must call `POST /login`. Never test endpoints or functions that you didn't generate.
 
 You respond ONLY with a valid JSON object — no markdown, no explanation.
 """

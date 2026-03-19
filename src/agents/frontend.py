@@ -119,6 +119,7 @@ TESTING RULE — ALWAYS use Vitest syntax in test files (NEVER Jest):
 - For async interactions use: await userEvent.click(element) or wrap in act(async () => { ... })
 - Import userEvent: import userEvent from '@testing-library/user-event' and use const user = userEvent.setup() in beforeEach
 - Always await fireEvent or userEvent calls that trigger state updates to avoid act() warnings
+- CRITICAL: tests MUST match the actual exports and APIs of the source files you generate in the same response. If src/api/auth.ts exports `loginUser`, the test must import and call `loginUser` — not `login`. If a hook is a default export, import it as default. Never test functions or exports that don't exist in your generated code.
 
 You respond ONLY with a valid JSON object — no markdown, no explanation.
 """
