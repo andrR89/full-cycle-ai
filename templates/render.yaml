@@ -21,17 +21,10 @@ services:
       - key: PORT
         value: 3000
 
-  - type: static
-    name: app-frontend
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          name: app-backend
-          type: web
-          property: host
+# NOTE: Static sites are not supported in Render Blueprints.
+# Create the frontend manually in Render Dashboard:
+#   New > Static Site > connect repo > rootDir: frontend
+#   Build: npm install && npm run build  |  Publish: dist
 
 databases:
   - name: app-db
