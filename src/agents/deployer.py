@@ -178,12 +178,15 @@ def _build_pr_body(state: AgentState) -> str:
 def _wait_for_ci(repo: Repository, branch_name: str, pr_number: int, timeout: int = 300) -> bool:
     """
     Poll GitHub to check if CI checks on the PR branch have passed.
-    Returns True if all required checks pass, False otherwise.
-    timeout: max seconds to wait (default 5 minutes).
+    Returns True if all required checks pass OR if no CI is configured.
+    Returns False only if CI actually ran and failed.
+    timeout: max seconds to wait for checks to appear and complete (default 5 minutes).
     """
     logger.info("Waiting for CI checks on branch '%s' (timeout=%ds)...", branch_name, timeout)
     start = time.time()
     poll_interval = 15  # seconds
+    # How long to wait for check runs to appear before assuming no CI is configured
+    ci_appear_timeout = 30  # seconds
 
     while time.time() - start < timeout:
         try:
@@ -192,7 +195,14 @@ def _wait_for_ci(repo: Repository, branch_name: str, pr_number: int, timeout: in
             runs = list(check_runs)
 
             if not runs:
-                logger.debug("No CI checks found yet, waiting...")
+                elapsed = time.time() - start
+                if elapsed >= ci_appear_timeout:
+                    logger.info(
+                        "No CI checks appeared after %ds — no CI configured, proceeding with merge.",
+                        elapsed,
+                    )
+                    return True
+                logger.debug("No CI checks found yet (%.0fs elapsed), waiting...", elapsed)
                 time.sleep(poll_interval)
                 continue
 
