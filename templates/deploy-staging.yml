@@ -1,9 +1,13 @@
 # =============================================================================
 # TEMPLATE: Copy this file to .github/workflows/deploy-staging.yml
-# in any project managed by the AI pipeline.
 #
-# Triggers automatically when an AI-generated PR is merged to main.
-# Add your actual deploy commands in the "Deploy to staging" step.
+# Triggers Render deploys when an AI-generated PR is merged to main.
+#
+# Required secrets in the target repo:
+#   RENDER_BACKEND_DEPLOY_HOOK  — from Render > backend service > Deploy Hook
+#   RENDER_FRONTEND_DEPLOY_HOOK — from Render > frontend static site > Deploy Hook
+#   RENDER_BACKEND_URL          — e.g. https://app-backend.onrender.com
+#   RENDER_FRONTEND_URL         — e.g. https://app-frontend.onrender.com
 # =============================================================================
 
 name: Deploy Staging
@@ -14,6 +18,7 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -22,44 +27,49 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    # Only run when an AI-generated PR is merged (not just closed)
     if: |
-      github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.title, '[AI]')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.title, '[AI]'))
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install backend dependencies
-        working-directory: backend
-        run: npm install
-
-      - name: Run tests (smoke check before deploy)
-        working-directory: backend
-        run: npm test -- --passWithNoTests
-
-      - name: Deploy to staging
+      - name: Trigger Render backend deploy
+        if: hashFiles('backend/**') != ''
         run: |
-          echo "Deploying to staging..."
-          # Add your deploy commands here, e.g.:
-          # npm run deploy:staging
-          # docker build + push
-          # kubectl apply
-          echo "Deploy complete."
+          echo "Triggering backend deploy on Render..."
+          curl -s --fail "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}" | jq .
+          echo "Backend deploy triggered."
+
+      - name: Trigger Render frontend deploy
+        if: hashFiles('frontend/**') != ''
+        run: |
+          echo "Triggering frontend deploy on Render..."
+          curl -s --fail "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}" | jq .
+          echo "Frontend deploy triggered."
 
       - name: Comment on PR with deploy status
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
+            const backendUrl = '${{ secrets.RENDER_BACKEND_URL }}' || '_not configured_';
+            const frontendUrl = '${{ secrets.RENDER_FRONTEND_URL }}' || '_not configured_';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: '### Staging Deploy\n\n✅ Deployed to staging successfully after merge.\n\n_Triggered by AI Issue Solver pipeline_',
+              body: [
+                '### Staging Deploy triggered on Render',
+                '',
+                '| Service | URL |',
+                '|---|---|',
+                `| Backend | ${backendUrl} |`,
+                `| Frontend | ${frontendUrl} |`,
+                '',
+                '_Deploy triggered by AI Issue Solver pipeline. Check Render dashboard for status._',
+              ].join('\n'),
             });

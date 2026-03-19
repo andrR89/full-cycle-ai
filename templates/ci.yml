@@ -1,9 +1,7 @@
 # =============================================================================
 # TEMPLATE: Copy this file to .github/workflows/ci.yml
-# in any project you want the AI pipeline to validate before merging.
-#
-# Runs tests + coverage on every PR. The AI deployer waits for these
-# checks to pass before auto-merging.
+# Runs tests + coverage (backend) and build check (frontend) on every PR.
+# The AI deployer waits for these checks to pass before auto-merging.
 # =============================================================================
 
 name: CI
@@ -15,8 +13,10 @@ on:
       - master
 
 jobs:
-  test:
+  backend:
+    name: Backend tests
     runs-on: ubuntu-latest
+    if: hashFiles('backend/**') != ''
 
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install backend dependencies
+      - name: Install dependencies
         working-directory: backend
         run: npm install
 
@@ -40,3 +40,27 @@ jobs:
           name: coverage-report
           path: backend/coverage/
           retention-days: 7
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    if: hashFiles('frontend/**') != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm test -- --passWithNoTests
