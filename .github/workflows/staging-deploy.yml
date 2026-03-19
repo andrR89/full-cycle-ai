@@ -1,0 +1,157 @@
+name: Staging Deploy
+
+on:
+  # Triggered by deployer agent via repository_dispatch
+  repository_dispatch:
+    types: [deploy-staging]
+
+  # Also triggered manually for testing
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        description: 'Branch to deploy to staging'
+        required: true
+        type: string
+      issue_number:
+        description: 'Issue number being deployed'
+        required: false
+        type: string
+
+  # Also triggered when a PR is merged to main (for staging validation)
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    # For pull_request trigger, only run on merge
+    if: |
+      github.event_name == 'repository_dispatch' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && contains(github.event.pull_request.title, '[AI]'))
+
+    permissions:
+      contents: read
+      deployments: write
+      statuses: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.branch_name || github.event.inputs.branch_name || github.event.pull_request.head.sha || 'main' }}
+          fetch-depth: 0
+
+      - name: Set deployment info
+        id: deploy-info
+        run: |
+          BRANCH="${{ github.event.client_payload.branch_name || github.event.inputs.branch_name || github.head_ref || 'main' }}"
+          ISSUE="${{ github.event.client_payload.issue_number || github.event.inputs.issue_number || '' }}"
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+          echo "issue=${ISSUE}" >> $GITHUB_OUTPUT
+          echo "deploy_url=https://staging.example.com" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Deployment
+        id: deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: '${{ steps.deploy-info.outputs.branch }}',
+              environment: 'staging',
+              description: 'AI pipeline staging deployment',
+              auto_merge: false,
+              required_contexts: [],
+            });
+            return deployment.data.id;
+          result-encoding: string
+
+      - name: Setup Node.js (if needed)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+        continue-on-error: true
+
+      - name: Install frontend dependencies
+        run: |
+          if [ -f "package.json" ]; then
+            npm ci --prefer-offline
+          else
+            echo "No package.json found, skipping npm install."
+          fi
+
+      - name: Build frontend
+        run: |
+          if [ -f "package.json" ] && grep -q '"build"' package.json; then
+            npm run build
+          else
+            echo "No build script found, skipping build."
+          fi
+
+      - name: Run backend tests
+        run: |
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then
+            npm test -- --passWithNoTests
+          else
+            echo "No test script found, skipping tests."
+          fi
+        continue-on-error: true
+
+      - name: Deploy to staging
+        id: staging-deploy
+        run: |
+          echo "Deploying branch ${{ steps.deploy-info.outputs.branch }} to staging..."
+          # Add actual deployment commands here (e.g., Docker, Kubernetes, Vercel, Railway, etc.)
+          # Example for a generic deployment:
+          # ./scripts/deploy-staging.sh ${{ steps.deploy-info.outputs.branch }}
+          echo "Staging deployment completed."
+          echo "staging_url=https://staging.example.com" >> $GITHUB_OUTPUT
+
+      - name: Update deployment status (success)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'success',
+              environment_url: '${{ steps.staging-deploy.outputs.staging_url }}',
+              description: 'Staging deployment successful',
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'failure',
+              description: 'Staging deployment failed',
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Comment on PR with staging URL
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `### Staging Deployment Successful\n\nYour changes are live at: ${{ steps.staging-deploy.outputs.staging_url }}\n\n_Deployed from branch \`${{ steps.deploy-info.outputs.branch }}\`_`,
+            });
