@@ -47,18 +47,12 @@ class FrontendOutput(BaseModel):
     @field_validator("files")
     @classmethod
     def validate_no_backend_files(cls, v: List[FileChange]) -> List[FileChange]:
-        backend_patterns = [
-            "prisma/", "src/routes/", "src/middleware/", "src/utils/server",
-            ".controller.", ".service.", "schema.prisma", "migrations/",
-            "src/db/", "src/models/",
-        ]
         for f in v:
-            for pattern in backend_patterns:
-                if pattern in f.path.lower():
-                    raise ValueError(
-                        f"Frontend agent tried to generate a backend file: {f.path}. "
-                        "This is not allowed."
-                    )
+            if f.path.startswith("backend/"):
+                raise ValueError(
+                    f"Frontend agent tried to generate a backend file: {f.path}. "
+                    "This is not allowed."
+                )
         return v
 
 
@@ -71,7 +65,7 @@ FRONTEND_SYSTEM_PROMPT = """You are a senior frontend engineer specializing in R
 CRITICAL RULES — NEVER VIOLATE:
 1. You ONLY generate frontend code: React components, pages, hooks, styles, tests.
 2. You NEVER generate backend code (Express routes, Prisma, middleware, database files).
-3. All generated files must be frontend-only (.tsx, .ts, .css).
+3. ALL file paths MUST start with "frontend/" (e.g., frontend/src/components/UserTable.tsx, frontend/src/pages/UsersPage.tsx).
 4. Use TypeScript with proper type definitions.
 5. Use Material-UI (MUI) components for UI elements.
 6. Follow React best practices: functional components, hooks, proper state management.
@@ -104,7 +98,7 @@ Generate a complete frontend implementation for this issue. Return a JSON object
 - test_instructions: how to test the changes
 - accessibility_notes: notes on accessibility implementations
 
-All file paths must be frontend-only (src/components/, src/pages/, src/hooks/, src/types/).
+All file paths must start with frontend/ (e.g., frontend/src/components/, frontend/src/pages/, frontend/src/hooks/, frontend/src/types/, frontend/package.json).
 """
 
 

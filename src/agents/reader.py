@@ -110,29 +110,37 @@ def fetch_codebase_context(repo_name: str, layers: List[str]) -> str:
     sections: List[str] = []
 
     if "backend" in layers:
-        # Fetch prisma schema
-        prisma_content = _fetch_github_file_content(repo, "prisma/schema.prisma")
+        prisma_content = _fetch_github_file_content(repo, "backend/prisma/schema.prisma")
         if prisma_content:
             sections.append(prisma_content)
 
-        # Fetch routes directory files
-        route_files = _list_dir_files(repo, "src/routes")
-        for fpath in route_files[:5]:  # cap at 5 files
+        route_files = _list_dir_files(repo, "backend/src/routes")
+        for fpath in route_files[:5]:
+            content = _fetch_github_file_content(repo, fpath)
+            if content:
+                sections.append(content)
+
+        middleware_files = _list_dir_files(repo, "backend/src/middleware")
+        for fpath in middleware_files[:3]:
             content = _fetch_github_file_content(repo, fpath)
             if content:
                 sections.append(content)
 
     if "frontend" in layers:
-        # Fetch components directory files
-        component_files = _list_dir_files(repo, "src/components")
+        component_files = _list_dir_files(repo, "frontend/src/components")
         for fpath in component_files[:5]:
             content = _fetch_github_file_content(repo, fpath)
             if content:
                 sections.append(content)
 
-        # Fetch pages directory files
-        page_files = _list_dir_files(repo, "src/pages")
+        page_files = _list_dir_files(repo, "frontend/src/pages")
         for fpath in page_files[:5]:
+            content = _fetch_github_file_content(repo, fpath)
+            if content:
+                sections.append(content)
+
+        hook_files = _list_dir_files(repo, "frontend/src/hooks")
+        for fpath in hook_files[:3]:
             content = _fetch_github_file_content(repo, fpath)
             if content:
                 sections.append(content)

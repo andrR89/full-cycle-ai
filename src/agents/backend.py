@@ -47,17 +47,12 @@ class BackendOutput(BaseModel):
     @field_validator("files")
     @classmethod
     def validate_no_frontend_files(cls, v: List[FileChange]) -> List[FileChange]:
-        frontend_patterns = [
-            ".tsx", ".jsx", "components/", "pages/", "hooks/",
-            "src/app/", "public/", ".css", ".scss", "index.html",
-        ]
         for f in v:
-            for pattern in frontend_patterns:
-                if pattern in f.path.lower():
-                    raise ValueError(
-                        f"Backend agent tried to generate a frontend file: {f.path}. "
-                        "This is not allowed."
-                    )
+            if f.path.startswith("frontend/"):
+                raise ValueError(
+                    f"Backend agent tried to generate a frontend file: {f.path}. "
+                    "This is not allowed."
+                )
         return v
 
 
@@ -70,7 +65,7 @@ BACKEND_SYSTEM_PROMPT = """You are a senior backend engineer specializing in Nod
 CRITICAL RULES — NEVER VIOLATE:
 1. You ONLY generate backend code: Express routes, Prisma models, middleware, utilities, tests.
 2. You NEVER generate frontend code (React, JSX, TSX, CSS, HTML, components, pages, hooks).
-3. All generated files must be backend-only.
+3. ALL file paths MUST start with "backend/" (e.g., backend/src/routes/users.js, backend/prisma/schema.prisma).
 4. Follow RESTful API design principles.
 5. Include input validation, error handling, and proper HTTP status codes.
 6. Generate Jest/Supertest unit tests for routes.
@@ -101,7 +96,7 @@ Generate backend implementation for this issue. Return a JSON object with:
 - summary: brief summary of the implementation
 - test_instructions: how to test the changes
 
-All file paths must be backend-only (src/routes/, src/middleware/, src/utils/, prisma/, tests/).
+All file paths must start with backend/ (e.g., backend/src/routes/, backend/src/middleware/, backend/prisma/, backend/tests/, backend/package.json).
 """
 
 
