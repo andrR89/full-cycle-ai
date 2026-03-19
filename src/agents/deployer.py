@@ -116,35 +116,43 @@ def _commit_files(
     files: List[Dict[str, str]],
     commit_message: str,
 ) -> None:
-    """Create or update files on the given branch."""
+    """
+    Commit all files in a single git commit using the Git Tree API.
+    This avoids triggering one CI run per file.
+    """
+    # Get the current HEAD commit and its tree
+    head_commit = repo.get_branch(branch_name).commit
+    base_tree = head_commit.commit.tree
+
+    # Create blobs for all files
+    tree_elements = []
     for file_info in files:
         path = file_info["path"]
         content = file_info["content"]
+        blob = repo.create_git_blob(content, "utf-8")
+        tree_elements.append({
+            "path": path,
+            "mode": "100644",
+            "type": "blob",
+            "sha": blob.sha,
+        })
+        logger.info("Staged file: %s", path)
 
-        try:
-            # Check if file exists
-            existing = repo.get_contents(path, ref=branch_name)
-            repo.update_file(
-                path=path,
-                message=commit_message,
-                content=content,
-                sha=existing.sha,
-                branch=branch_name,
-            )
-            logger.info("Updated file: %s", path)
-        except GithubException as exc:
-            if exc.status == 404:
-                # File does not exist, create it
-                repo.create_file(
-                    path=path,
-                    message=commit_message,
-                    content=content,
-                    branch=branch_name,
-                )
-                logger.info("Created file: %s", path)
-            else:
-                logger.error("Failed to commit file %s: %s", path, exc)
-                raise
+    # Create a new tree with all files
+    new_tree = repo.create_git_tree(tree_elements, base_tree)
+
+    # Create a single commit
+    new_commit = repo.create_git_commit(
+        message=commit_message,
+        tree=new_tree,
+        parents=[head_commit.commit],
+    )
+
+    # Update the branch ref to point to the new commit
+    ref = repo.get_git_ref(f"heads/{branch_name}")
+    ref.edit(sha=new_commit.sha)
+
+    logger.info("Committed %d file(s) in a single commit: %s", len(files), new_commit.sha[:7])
 
 
 def _build_pr_body(state: AgentState) -> str:
