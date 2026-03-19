@@ -220,7 +220,7 @@ def _wait_for_ci(repo: Repository, branch_name: str, pr_number: int, timeout: in
     start = time.time()
     poll_interval = 15  # seconds
     # How long to wait for check runs to appear before assuming no CI is configured
-    ci_appear_timeout = 60  # seconds
+    ci_appear_timeout = 90  # seconds
 
     while time.time() - start < timeout:
         try:

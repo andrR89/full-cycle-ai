@@ -92,6 +92,10 @@ ALLOWED_BACKEND_PREFIXES = (
     "backend/package.json",
     "backend/.env.example",
     "backend/Dockerfile",
+    "backend/jest.config.js",
+    "backend/jest.config.ts",
+    "backend/jest.setup.js",
+    "backend/jest.setup.ts",
 )
 
 ALLOWED_FRONTEND_PREFIXES = (
@@ -213,16 +217,24 @@ _DANGEROUS_COMPILED = [
 ]
 
 
+_TEST_PATH_MARKERS = ("/tests/", "/test/", "/__tests__/", ".test.", ".spec.")
+
+
 def scan_generated_code(files: List[Dict]) -> List[str]:
     """
     Scan generated files for dangerous patterns.
+    Skips credential checks on test files (passwords in tests are expected).
     Returns a list of warning strings (empty = clean).
     """
+    _credential_patterns = {"Hardcoded credential", "Potential hardcoded token"}
     warnings: List[str] = []
     for f in files:
         path = f.get("path", "unknown")
         content = f.get("content", "")
+        is_test = any(marker in path for marker in _TEST_PATH_MARKERS)
         for pattern, description in _DANGEROUS_COMPILED:
+            if is_test and description in _credential_patterns:
+                continue  # test passwords/tokens are expected
             if pattern.search(content):
                 warning = f"[{path}] {description}"
                 warnings.append(warning)
