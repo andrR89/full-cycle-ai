@@ -83,8 +83,12 @@ SCAFFOLDING RULE — ALWAYS include these files in EVERY response, even if they 
   import react from '@vitejs/plugin-react'
   export default defineConfig({
     plugins: [react()],
-    test: { globals: true, environment: 'jsdom', setupFiles: [] },
+    test: { globals: true, environment: 'jsdom', setupFiles: ['./src/test/setup.ts'] },
   })
+  ```
+- frontend/src/test/setup.ts — EXACT content (required for toBeInTheDocument and other jest-dom matchers):
+  ```
+  import '@testing-library/jest-dom'
   ```
 - frontend/tsconfig.json — EXACT content (exclude test files so tsc does not compile them):
   ```
@@ -103,6 +107,7 @@ SCAFFOLDING RULE — ALWAYS include these files in EVERY response, even if they 
     "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
   }
   ```
+- frontend/package.json — MUST include "@testing-library/jest-dom" in devDependencies
 - frontend/index.html — Vite entry point with <div id="root"> and /src/main.tsx
 - frontend/src/main.tsx — ReactDOM.createRoot entry point wrapping <App />
 
