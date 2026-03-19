@@ -9,7 +9,8 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from pydantic import BaseModel, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -175,11 +176,7 @@ def _call_gemini_pro(
     if not api_key:
         raise EnvironmentError("GEMINI_API_KEY environment variable is not set.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        "gemini-1.5-pro",
-        system_instruction=REVIEWER_SYSTEM_PROMPT,
-    )
+    client = genai.Client(api_key=api_key)
 
     user_message = REVIEWER_USER_PROMPT_TEMPLATE.format(
         title=title,
@@ -189,11 +186,13 @@ def _call_gemini_pro(
         frontend_output=_format_agent_output(frontend_output, "frontend"),
     )
 
-    response = model.generate_content(
-        user_message,
-        generation_config=genai.GenerationConfig(
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=user_message,
+        config=genai_types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=0.2,
+            system_instruction=REVIEWER_SYSTEM_PROMPT,
         ),
     )
 
@@ -256,12 +255,12 @@ def run(state: AgentState) -> AgentState:
         )
     except Exception as exc:
         logger.error("Reviewer agent failed after retries: %s", exc)
-        # On reviewer failure, we cannot determine approval — reject to be safe
+        # Increment retry_count so the graph doesn't loop indefinitely on API errors
         return {
-            **state,
             "layer_reviews": {},
             "global_status": "rejected",
             "reviewer_feedback": f"Reviewer agent encountered an error: {exc}. Please retry.",
+            "retry_count": state.get("retry_count", 0) + 1,
         }
 
     logger.info(

@@ -9,7 +9,8 @@ import json
 import logging
 from typing import List, Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from github import Github
 from pydantic import BaseModel, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -182,8 +183,7 @@ def _call_gemini_flash(title: str, body: str, retry_context: str = "") -> Reader
     if not api_key:
         raise EnvironmentError("GEMINI_API_KEY environment variable is not set.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=api_key)
 
     prompt = READER_PROMPT_TEMPLATE.format(
         title=sanitize_prompt_input(title, "issue_title"),
@@ -191,9 +191,10 @@ def _call_gemini_flash(title: str, body: str, retry_context: str = "") -> Reader
         retry_context=retry_context if retry_context else "N/A",
     )
 
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=0.1,
         ),

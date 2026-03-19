@@ -10,7 +10,8 @@ import json
 import logging
 from typing import List, Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from github import Github, GithubException
 from pydantic import BaseModel, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -129,14 +130,14 @@ def _structure_issue_with_gemini(text: str) -> StructuredIssue:
     if not api_key:
         raise EnvironmentError("GEMINI_API_KEY environment variable is not set.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=api_key)
 
     prompt = STRUCTURER_PROMPT_TEMPLATE.format(text=text)
 
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=0.2,
         ),
