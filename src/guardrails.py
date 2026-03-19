@@ -84,28 +84,26 @@ def sanitize_prompt_input(text: str, field_name: str = "input") -> str:
 # ---------------------------------------------------------------------------
 
 ALLOWED_BACKEND_PREFIXES = (
-    "backend/src/routes/",
-    "backend/src/middleware/",
-    "backend/src/utils/",
-    "backend/src/config/",
-    "backend/src/services/",
+    "backend/src/",
     "backend/prisma/",
     "backend/tests/",
     "backend/test/",
     "backend/__tests__/",
     "backend/package.json",
+    "backend/.env.example",
 )
 
 ALLOWED_FRONTEND_PREFIXES = (
-    "frontend/src/components/",
-    "frontend/src/pages/",
-    "frontend/src/hooks/",
-    "frontend/src/contexts/",
-    "frontend/src/store/",
-    "frontend/src/styles/",
-    "frontend/src/types/",
-    "frontend/src/api/",
+    "frontend/src/",
+    "frontend/public/",
+    "frontend/tests/",
+    "frontend/test/",
+    "frontend/__tests__/",
     "frontend/package.json",
+    "frontend/.env.example",
+    "frontend/index.html",
+    "frontend/vite.config.ts",
+    "frontend/tsconfig.json",
 )
 
 ALL_ALLOWED_PREFIXES = ALLOWED_BACKEND_PREFIXES + ALLOWED_FRONTEND_PREFIXES
@@ -140,8 +138,13 @@ def validate_file_path(path: str) -> str:
     if parts[0].startswith(".") and parts[0] not in (".github",):
         raise ValueError(f"Hidden/dot file at root not allowed: {path}")
 
-    # Allow package.json at backend/ or frontend/ root directly
-    if normalized in ("backend/package.json", "frontend/package.json"):
+    # Allow known root-level config files for each layer
+    _root_allowed = {
+        "backend/package.json", "backend/.env.example",
+        "frontend/package.json", "frontend/.env.example",
+        "frontend/index.html", "frontend/vite.config.ts", "frontend/tsconfig.json",
+    }
+    if normalized in _root_allowed:
         return normalized
 
     filename = parts[-1].lower()
