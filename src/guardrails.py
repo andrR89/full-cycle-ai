@@ -108,7 +108,10 @@ ALLOWED_FRONTEND_PREFIXES = (
     "frontend/.env.example",
     "frontend/index.html",
     "frontend/vite.config.ts",
+    "frontend/vite.config.js",
     "frontend/tsconfig.json",
+    "frontend/tsconfig.app.json",
+    "frontend/tsconfig.node.json",
     "frontend/Dockerfile",
 )
 

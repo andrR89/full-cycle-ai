@@ -390,6 +390,32 @@ def run(state: AgentState) -> AgentState:
     except Exception as exc:
         logger.warning("Could not comment on issue: %s", exc)
 
+    # Block auto-merge if guardrail rejected files — incomplete implementation
+    if rejected_paths:
+        logger.warning(
+            "Deployer: skipping auto-merge — %d file(s) were rejected by guardrail: %s",
+            len(rejected_paths), rejected_paths,
+        )
+        try:
+            pr.create_review(
+                body=(
+                    f"⚠️ **Auto-merge blocked**: {len(rejected_paths)} file(s) were rejected by "
+                    f"the path guardrail and could not be committed:\n"
+                    + "\n".join(f"- `{p}`" for p in rejected_paths)
+                    + "\n\nPlease review, fix the missing files, and merge manually."
+                ),
+                event="COMMENT",
+            )
+        except Exception as exc:
+            logger.warning("Could not add guardrail comment: %s", exc)
+        return {
+            **state,
+            "branch_name": branch_name,
+            "pr_url": pr.html_url,
+            "ci_passed": False,
+            "guardrail_rejected": rejected_paths,
+        }
+
     # Wait for CI and auto-merge if passed
     ci_passed = _wait_for_ci(repo, branch_name, pr.number, timeout=300)
 
@@ -403,7 +429,6 @@ def run(state: AgentState) -> AgentState:
             logger.info("PR #%d merged successfully.", pr.number)
         except GithubException as exc:
             logger.error("Auto-merge failed: %s", exc)
-            # PR stays open for manual merge
     else:
         logger.warning(
             "CI did not pass — PR #%d left open for manual review.",
