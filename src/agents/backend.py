@@ -174,7 +174,7 @@ def run(state: AgentState) -> AgentState:
     """
     if "backend" not in state.get("issue_layers", []):
         logger.info("Backend agent skipped — 'backend' not in layers.")
-        return {**state, "backend_output": None}
+        return {"backend_output": None}
 
     logger.info(
         "Backend agent starting for issue #%s",
@@ -199,9 +199,7 @@ def run(state: AgentState) -> AgentState:
         )
     except Exception as exc:
         logger.error("Backend agent failed after retries: %s", exc)
-        # Return a minimal error output so the graph can continue
         return {
-            **state,
             "backend_output": {
                 "error": str(exc),
                 "files": [],
@@ -218,7 +216,4 @@ def run(state: AgentState) -> AgentState:
         [f.path for f in output.files],
     )
 
-    return {
-        **state,
-        "backend_output": output.model_dump(),
-    }
+    return {"backend_output": output.model_dump()}

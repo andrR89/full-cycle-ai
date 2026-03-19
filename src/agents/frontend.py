@@ -176,7 +176,7 @@ def run(state: AgentState) -> AgentState:
     """
     if "frontend" not in state.get("issue_layers", []):
         logger.info("Frontend agent skipped — 'frontend' not in layers.")
-        return {**state, "frontend_output": None}
+        return {"frontend_output": None}
 
     logger.info(
         "Frontend agent starting for issue #%s",
@@ -202,7 +202,6 @@ def run(state: AgentState) -> AgentState:
     except Exception as exc:
         logger.error("Frontend agent failed after retries: %s", exc)
         return {
-            **state,
             "frontend_output": {
                 "error": str(exc),
                 "files": [],
@@ -219,7 +218,4 @@ def run(state: AgentState) -> AgentState:
         [f.path for f in output.files],
     )
 
-    return {
-        **state,
-        "frontend_output": output.model_dump(),
-    }
+    return {"frontend_output": output.model_dump()}
